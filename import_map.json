@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "@oslo/oauth2": "https://deno.land/x/oauth2@v1.2.1/mod.ts"
+  }
+}
