@@ -11,13 +11,13 @@ const DEFAULT_CONFIG = {
   YOUTUBE_CLIENT_ID: "your_youtube_client_id",
   YOUTUBE_CLIENT_SECRET: "your_youtube_client_secret",
   YOUTUBE_REDIRECT_URI: "http://localhost:8000/oauth2/youtube/callback",
-  YOUTUBE_API_KEY: "your_youtube_api_key",
+  // YOUTUBE_API_KEY: "your_youtube_api_key", // Likely unused
 
   // LinkedIn API Configuration
   LINKEDIN_CLIENT_ID: "your_linkedin_client_id",
   LINKEDIN_CLIENT_SECRET: "your_linkedin_client_secret",
   LINKEDIN_REDIRECT_URI: "http://localhost:8000/oauth2/linkedin/callback",
-  LINKEDIN_API_KEY: "your_linkedin_api_key",
+  // LINKEDIN_API_KEY: "your_linkedin_api_key", // Likely unused
 
   // Application Settings
   APP_PORT: "8000",
@@ -37,36 +37,9 @@ const DEFAULT_CONFIG = {
   DEFAULT_PRESET: "veryfast"
 };
 
-/**
- * Load environment variables from .env file
- * This is wrapped in a try-catch because it will fail if the .env file doesn't exist
- */
-try {
-  const env = await Deno.readTextFile(".env");
-  
-  // Parse each line in the .env file
-  const lines = env.split("\n");
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    
-    // Skip empty lines and comments
-    if (!trimmedLine || trimmedLine.startsWith("#")) {
-      continue;
-    }
-    
-    const [key, ...valueParts] = trimmedLine.split("=");
-    const value = valueParts.join("="); // Handle values with = in them
-    
-    if (key && value) {
-      Deno.env.set(key.trim(), value.trim());
-    }
-  }
-  
-  console.log("Loaded configuration from .env file");
-} catch (error) {
-  console.warn("Failed to load .env file. Using default or environment variables.", error);
-}
-
+// Environment variables should be loaded automatically using the --env flag
+// when running the Deno application, or set directly in the environment.
+// Removed manual .env parsing logic.
 /**
  * Get configuration value with fallback to default
  * @param key The configuration key
@@ -84,14 +57,14 @@ export const config = {
     clientId: getConfig("YOUTUBE_CLIENT_ID"),
     clientSecret: getConfig("YOUTUBE_CLIENT_SECRET"),
     redirectUri: getConfig("YOUTUBE_REDIRECT_URI"),
-    apiKey: getConfig("YOUTUBE_API_KEY")
+    // apiKey: getConfig("YOUTUBE_API_KEY") // Likely unused
   },
   
   linkedin: {
     clientId: getConfig("LINKEDIN_CLIENT_ID"),
     clientSecret: getConfig("LINKEDIN_CLIENT_SECRET"),
     redirectUri: getConfig("LINKEDIN_REDIRECT_URI"),
-    apiKey: getConfig("LINKEDIN_API_KEY")
+    // apiKey: getConfig("LINKEDIN_API_KEY") // Likely unused
   },
   
   app: {

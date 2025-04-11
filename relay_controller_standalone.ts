@@ -8,15 +8,15 @@
 
 // Import API client interfaces (no actual implementations)
 interface YouTubeClient {
-  createBroadcast(options: any): Promise<{id: string}>;
-  createStream(options: any): Promise<{id: string}>;
+  createBroadcast(options: Record<string, unknown>): Promise<{id: string}>;
+  createStream(options: Record<string, unknown>): Promise<{id: string}>;
   bindStreamToBroadcast(broadcastId: string, streamId: string): Promise<void>;
   startBroadcast(broadcastId: string): Promise<void>;
   endBroadcast(broadcastId: string): Promise<void>;
 }
 
 interface LinkedInClient {
-  createLiveEvent(options: any): Promise<{id: string}>;
+  createLiveEvent(options: Record<string, unknown>): Promise<{id: string}>;
   startLiveEvent(eventId: string): Promise<void>;
   endLiveEvent(eventId: string): Promise<void>;
 }
@@ -25,22 +25,25 @@ interface LinkedInClient {
 function createYouTubeClient(accountId: string): YouTubeClient {
   console.log(`Creating YouTube client for account ${accountId}`);
   return {
-    createBroadcast: async (options) => {
+    createBroadcast: (options) => {
       console.log(`[MOCK] Creating YouTube broadcast: ${options.title}`);
-      return { id: `yt-broadcast-${Date.now()}` };
+      return Promise.resolve({ id: `yt-broadcast-${Date.now()}` });
     },
-    createStream: async (options) => {
+    createStream: (options) => {
       console.log(`[MOCK] Creating YouTube stream: ${options.title}`);
-      return { id: `yt-stream-${Date.now()}` };
+      return Promise.resolve({ id: `yt-stream-${Date.now()}` });
     },
-    bindStreamToBroadcast: async (broadcastId, streamId) => {
+    bindStreamToBroadcast: (broadcastId, streamId) => {
       console.log(`[MOCK] Binding YouTube stream ${streamId} to broadcast ${broadcastId}`);
+      return Promise.resolve();
     },
-    startBroadcast: async (broadcastId) => {
+    startBroadcast: (broadcastId) => {
       console.log(`[MOCK] Starting YouTube broadcast ${broadcastId}`);
+      return Promise.resolve();
     },
-    endBroadcast: async (broadcastId) => {
+    endBroadcast: (broadcastId) => {
       console.log(`[MOCK] Ending YouTube broadcast ${broadcastId}`);
+      return Promise.resolve();
     }
   };
 }
@@ -48,15 +51,17 @@ function createYouTubeClient(accountId: string): YouTubeClient {
 function createLinkedInClient(accountId: string): LinkedInClient {
   console.log(`Creating LinkedIn client for account ${accountId}`);
   return {
-    createLiveEvent: async (options) => {
+    createLiveEvent: (options) => {
       console.log(`[MOCK] Creating LinkedIn live event: ${options.title}`);
-      return { id: `li-event-${Date.now()}` };
+      return Promise.resolve({ id: `li-event-${Date.now()}` });
     },
-    startLiveEvent: async (eventId) => {
+    startLiveEvent: (eventId) => {
       console.log(`[MOCK] Starting LinkedIn live event ${eventId}`);
+      return Promise.resolve();
     },
-    endLiveEvent: async (eventId) => {
+    endLiveEvent: (eventId) => {
       console.log(`[MOCK] Ending LinkedIn live event ${eventId}`);
+      return Promise.resolve();
     }
   };
 }
@@ -118,7 +123,7 @@ let currentStatus: RelayStatus = {
   isActive: false,
   platforms: {}
 };
-let streamProcessId: number | null = null;
+let _streamProcessId: number | null = null;
 
 /**
  * Configure the relay service with specific settings
@@ -175,20 +180,20 @@ export async function addDestination(destination: StreamDestination): Promise<vo
  * @param accountId The account ID to remove
  * @returns Promise that resolves when destination is removed
  */
-export async function removeDestination(platform: StreamPlatform, accountId: string): Promise<void> {
+export function removeDestination(platform: StreamPlatform, accountId: string): Promise<void> {
   try {
-    // Save a copy of the destination we're about to remove
-    const destinationToRemove = destinations.find(
+    // Find the destination to remove (no need to save a copy if unused)
+    const destinationExists = destinations.some(
       d => d.platform === platform && d.accountId === accountId
     );
     
     // Filter out the destination to remove
-    const initialCount = destinations.length;
+    // const initialCount = destinations.length; // Unused
     destinations = destinations.filter(
       d => !(d.platform === platform && d.accountId === accountId)
     );
     
-    if (destinations.length === initialCount) {
+    if (!destinationExists) { // Check if it existed before filtering
       console.warn(`Destination not found: ${platform} account ${accountId}`);
       return Promise.resolve();
     }
@@ -267,7 +272,7 @@ export async function startStream(settings: StreamSettings): Promise<void> {
     }
     
     // Simulate starting the actual relay process
-    streamProcessId = Math.floor(Math.random() * 10000);
+    _streamProcessId = Math.floor(Math.random() * 10000);
     
     console.log("Stream started successfully");
     return Promise.resolve();
@@ -301,7 +306,7 @@ export async function stopStream(): Promise<void> {
     
     // Update status
     currentStatus.isActive = false;
-    streamProcessId = null;
+    _streamProcessId = null;
     
     // Calculate duration
     if (currentStatus.startedAt) {

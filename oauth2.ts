@@ -1,213 +1,263 @@
-import { OAuth2Client } from "https://deno.land/x/oauth2_client@v0.2.1/mod.ts";
-
-// Create the OAuth2 clients for YouTube and LinkedIn
-const youtubeOAuth2Client = new OAuth2Client({
-  clientId: Deno.env.get("YOUTUBE_CLIENT_ID") || "",
-  clientSecret: Deno.env.get("YOUTUBE_CLIENT_SECRET") || "",
-  authorizationEndpointUri: "https://accounts.google.com/o/oauth2/v2/auth",
-  tokenUri: "https://oauth2.googleapis.com/token",
-  redirectUri: Deno.env.get("YOUTUBE_REDIRECT_URI") || "",
-  defaults: {
-    scope: "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload",
-  },
-});
-
-const linkedinOAuth2Client = new OAuth2Client({
-  clientId: Deno.env.get("LINKEDIN_CLIENT_ID") || "",
-  clientSecret: Deno.env.get("LINKEDIN_CLIENT_SECRET") || "",
-  authorizationEndpointUri: "https://www.linkedin.com/oauth/v2/authorization",
-  tokenUri: "https://www.linkedin.com/oauth/v2/accessToken",
-  redirectUri: Deno.env.get("LINKEDIN_REDIRECT_URI") || "",
-  defaults: {
-    scope: "r_liteprofile w_member_social",
-  },
-});
-
 /**
- * Get tokens from authorization code
+ * Manual OAuth 2.0 Authorization Code Flow Handlers
  */
-async function getTokens(client: OAuth2Client, code: string): Promise<{ accessToken: string } | null> {
-  try {
-    const tokens = await client.code.getToken(code);
-    console.log("Tokens:", tokens);
-    
-    const accessToken = tokens.accessToken;
-    if (!accessToken) {
-      console.log("Access token is null");
-      return null;
-    }
 
-    return {
-      accessToken: accessToken,
-    };
-  } catch (error: unknown) {
-    console.error("Error during token exchange:", error);
-    return null;
-  }
-}
+// --- YouTube OAuth Handler ---
 
 /**
- * Process YouTube OAuth callback code
- */
-export async function youtubeOAuthCallback(code: string): Promise<{ accessToken: string; refreshToken: string } | null> {
-  try {
-    const tokens = await youtubeOAuth2Client.code.getToken(code);
-    
-    const accessToken = tokens.accessToken;
-    const refreshToken = tokens.refreshToken;
-
-    if (!accessToken || !refreshToken) {
-      console.log("Access token or refresh token is null");
-      return null;
-    }
-
-    return {
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-    };
-  } catch (error: unknown) {
-    console.error("Error during token exchange:", error);
-    return null;
-  }
-}
-
-/**
- * Process LinkedIn OAuth callback code
- */
-export async function linkedinOAuthCallback(code: string): Promise<{ accessToken: string; refreshToken: string } | null> {
-  try {
-    const tokens = await linkedinOAuth2Client.code.getToken(code);
-    
-    const accessToken = tokens.accessToken;
-    const refreshToken = tokens.refreshToken;
-
-    if (!accessToken || !refreshToken) {
-      console.log("Access token or refresh token is null");
-      return null;
-    }
-
-    return {
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-    };
-  } catch (error: unknown) {
-    console.error("Error during token exchange:", error);
-    return null;
-  }
-}
-
-/**
- * Refresh YouTube access token
- */
-export async function refreshYoutubeToken(refreshToken: string): Promise<{ accessToken: string } | null> {
-  try {
-    const tokens = await youtubeOAuth2Client.refreshToken.refresh(refreshToken);
-    
-    const accessToken = tokens.accessToken;
-    if (!accessToken) {
-      console.error("Error refreshing YouTube token: Access token is null");
-      return null;
-    }
-
-    return { accessToken: accessToken };
-  } catch (error: unknown) {
-    console.error("Error refreshing YouTube token:", error);
-    return null;
-  }
-}
-
-/**
- * Refresh LinkedIn access token
- */
-export async function refreshLinkedinToken(refreshToken: string): Promise<{ accessToken: string } | null> {
-  try {
-    const tokens = await linkedinOAuth2Client.refreshToken.refresh(refreshToken);
-    
-    const accessToken = tokens.accessToken;
-    if (!accessToken) {
-      console.error("Error refreshing LinkedIn token: Access token is null");
-      return null;
-    }
-
-    return { accessToken: accessToken };
-  } catch (error: unknown) {
-    console.error("Error refreshing LinkedIn token:", error);
-    return null;
-  }
-}
-
-/**
- * YouTube OAuth request handler
+ * YouTube OAuth request handler (Manual Flow)
  */
 export async function youtubeOAuth(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  
+  const error = url.searchParams.get("error");
+
+  if (error) {
+    console.error("OAuth Error (YouTube):", url.searchParams.get("error_description") || error);
+    return new Response(`OAuth Error: ${error}`, { status: 400 });
+  }
+
   if (code) {
-    // This is the callback with the code
+    // --- Step 2: Handle the callback from Google ---
     try {
-      const tokens = await youtubeOAuthCallback(code);
-      if (!tokens) {
-        return new Response("Failed to get tokens from code", { status: 400 });
+      const tokenUri = "https://oauth2.googleapis.com/token";
+      const clientId = Deno.env.get("YOUTUBE_CLIENT_ID") || "";
+      const clientSecret = Deno.env.get("YOUTUBE_CLIENT_SECRET") || "";
+      const redirectUri = Deno.env.get("YOUTUBE_REDIRECT_URI") || "";
+
+      if (!clientId || !clientSecret || !redirectUri) {
+         throw new Error("Missing YouTube OAuth environment variables");
       }
+
+      // Prepare token exchange request body
+      const tokenRequestBody = new URLSearchParams({
+        code: code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      });
+      console.log("Sending YouTube Token Request Body:", tokenRequestBody.toString()); // Log request body
+
+      // Exchange authorization code for tokens
+      const response = await fetch(tokenUri, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: tokenRequestBody,
+      });
+
+      // Log the full response for debugging
+      const responseText = await response.text();
+      console.log("YouTube Token Endpoint Response Status:", response.status);
+      console.log("YouTube Token Endpoint Response Body:", responseText);
+
+      if (!response.ok) {
+        let errorBody;
+        try {
+          errorBody = JSON.parse(responseText);
+        } catch (e) {
+          errorBody = { error: "Failed to parse JSON error response", raw: responseText };
+        }
+        console.error("Token exchange failed (YouTube):", errorBody);
+        throw new Error(`Token exchange failed: ${response.statusText} - ${errorBody.error_description || errorBody.error || 'Unknown error'}`);
+      }
+
+      const tokens = JSON.parse(responseText);
+
+      // Extract tokens (names might vary slightly by provider)
+      const accessToken = tokens.access_token;
+      const refreshToken = tokens.refresh_token; // Google provides this on first auth with access_type=offline
+
+      if (!accessToken) {
+         console.error("Access Token not found in response (YouTube):", tokens);
+         throw new Error("Access Token not found in response from Google");
+      }
+      // It's okay if refresh token is missing on subsequent calls
       
-      // Set cookie with access token
+      // TODO: Securely store the accessToken and refreshToken associated with the user account
+      // For this example, we store the access token in a session cookie
+      console.log("YouTube Access Token obtained (first few chars):", accessToken.substring(0, 10));
+      if (refreshToken) {
+        console.log("YouTube Refresh Token obtained."); 
+        // Store refreshToken securely (e.g., encrypted in database)
+      } else {
+        console.warn("YouTube Refresh Token not obtained. User might need to re-authenticate later.");
+      }
+
+
+      // Set cookie with access token (adjust cookie settings as needed)
       const headers = new Headers();
-      headers.set("Set-Cookie", `youtube_session=${tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax`);
-      
-      return new Response("YouTube authentication successful! You can close this window.", { 
+      headers.set(
+        "Set-Cookie",
+        `youtube_session=${accessToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600` // Example: 1 hour expiry
+      );
+
+      // Return plain text success message
+      headers.set("Content-Type", "text/plain");
+      return new Response("YouTube authentication successful! You can close this window.", {
         status: 200,
-        headers
+        headers,
       });
-    } catch (error) {
-      return new Response(`Error during authentication: ${error instanceof Error ? error.message : String(error)}`, { 
-        status: 500 
-      });
+
+    } catch (err) {
+      console.error("Error during YouTube token exchange:", err);
+      return new Response(
+        `Error during authentication: ${err instanceof Error ? err.message : String(err)}`,
+        { status: 500 }
+      );
     }
   } else {
-    // This is the initial auth request, redirect to YouTube
-    const authUrl = youtubeOAuth2Client.code.getAuthorizationUri();
+    // --- Step 1: Redirect user to Google for authorization ---
+    const youtubeAuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
+    const youtubeState = crypto.randomUUID();
+    // TODO: Store youtubeState server-side (e.g., session or short-lived KV entry) associated with the user's session
+
+    const params = new URLSearchParams({
+      client_id: Deno.env.get("YOUTUBE_CLIENT_ID") || "",
+      redirect_uri: Deno.env.get("YOUTUBE_REDIRECT_URI") || "",
+      response_type: "code",
+      scope: "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload",
+      state: youtubeState,
+      access_type: "offline", // Request refresh token
+      // prompt: "consent" // Temporarily removed to simplify flow
+    });
+
+    const manualAuthUrl = `${youtubeAuthEndpoint}?${params.toString()}`;
+    console.log("Redirecting to YouTube:", manualAuthUrl); 
+
     return new Response(null, {
       status: 302,
-      headers: { Location: authUrl.toString() }
+      headers: { Location: manualAuthUrl },
     });
   }
 }
 
+// --- LinkedIn OAuth Handler ---
+
 /**
- * LinkedIn OAuth request handler
+ * LinkedIn OAuth request handler (Manual Flow)
  */
 export async function linkedinOAuth(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  
+  const error = url.searchParams.get("error");
+
+  if (error) {
+    console.error("OAuth Error (LinkedIn):", url.searchParams.get("error_description") || error);
+    return new Response(`OAuth Error: ${error}`, { status: 400 });
+  }
+
   if (code) {
-    // This is the callback with the code
+    // --- Step 2: Handle the callback from LinkedIn ---
     try {
-      const tokens = await linkedinOAuthCallback(code);
-      if (!tokens) {
-        return new Response("Failed to get tokens from code", { status: 400 });
+      const tokenUri = "https://www.linkedin.com/oauth/v2/accessToken";
+      const clientId = Deno.env.get("LINKEDIN_CLIENT_ID") || "";
+      const clientSecret = Deno.env.get("LINKEDIN_CLIENT_SECRET") || "";
+      const redirectUri = Deno.env.get("LINKEDIN_REDIRECT_URI") || "";
+
+      if (!clientId || !clientSecret || !redirectUri) {
+         throw new Error("Missing LinkedIn OAuth environment variables");
       }
-      
+
+      // Prepare token exchange request body
+      const tokenRequestBody = new URLSearchParams({
+        code: code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      });
+      console.log("Sending LinkedIn Token Request Body:", tokenRequestBody.toString()); // Log request body
+
+      // Exchange authorization code for tokens
+      const response = await fetch(tokenUri, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: tokenRequestBody,
+      });
+
+      // Log the full response for debugging
+      const responseText = await response.text();
+      console.log("LinkedIn Token Endpoint Response Status:", response.status);
+      console.log("LinkedIn Token Endpoint Response Body:", responseText);
+
+      if (!response.ok) {
+        let errorBody;
+        try {
+          errorBody = JSON.parse(responseText);
+        } catch (e) {
+          errorBody = { error: "Failed to parse JSON error response", raw: responseText };
+        }
+        console.error("Token exchange failed (LinkedIn):", errorBody);
+        throw new Error(`Token exchange failed: ${response.statusText} - ${errorBody.error_description || errorBody.error || 'Unknown error'}`);
+      }
+
+      const tokens = JSON.parse(responseText);
+
+      // Extract tokens
+      const accessToken = tokens.access_token;
+      // LinkedIn might provide a refresh token depending on scope/settings, but often doesn't by default
+      const refreshToken = tokens.refresh_token; 
+
+      if (!accessToken) {
+        console.error("Access Token not found in response (LinkedIn):", tokens);
+        throw new Error("Access Token not found in response from LinkedIn");
+      }
+
+      // TODO: Securely store the accessToken and refreshToken (if available) associated with the user account
+      console.log("LinkedIn Access Token obtained (first few chars):", accessToken.substring(0, 10));
+      if (refreshToken) {
+        console.log("LinkedIn Refresh Token obtained.");
+        // Store refreshToken securely
+      } else {
+         console.warn("LinkedIn Refresh Token not obtained.");
+      }
+
       // Set cookie with access token
       const headers = new Headers();
-      headers.set("Set-Cookie", `linkedin_session=${tokens.accessToken}; Path=/; HttpOnly; SameSite=Lax`);
-      
-      return new Response("LinkedIn authentication successful! You can close this window.", { 
+      headers.set(
+        "Set-Cookie",
+        `linkedin_session=${accessToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600` // Example: 1 hour expiry
+      );
+
+      // Return plain text success message
+      headers.set("Content-Type", "text/plain");
+      return new Response("LinkedIn authentication successful! You can close this window.", {
         status: 200,
-        headers
+        headers,
       });
-    } catch (error) {
-      return new Response(`Error during authentication: ${error instanceof Error ? error.message : String(error)}`, { 
-        status: 500 
-      });
+
+    } catch (err) {
+      console.error("Error during LinkedIn token exchange:", err);
+      return new Response(
+        `Error during authentication: ${err instanceof Error ? err.message : String(err)}`,
+        { status: 500 }
+      );
     }
   } else {
-    // This is the initial auth request, redirect to LinkedIn
-    const authUrl = linkedinOAuth2Client.code.getAuthorizationUri();
+    // --- Step 1: Redirect user to LinkedIn for authorization ---
+    const linkedinAuthEndpoint = "https://www.linkedin.com/oauth/v2/authorization";
+    const linkedinState = crypto.randomUUID();
+    // TODO: Store linkedinState server-side (e.g., session or short-lived KV entry) associated with the user's session
+
+    const params = new URLSearchParams({
+      client_id: Deno.env.get("LINKEDIN_CLIENT_ID") || "",
+      redirect_uri: Deno.env.get("LINKEDIN_REDIRECT_URI") || "",
+      response_type: "code",
+      scope: "r_liteprofile w_member_social", // Ensure these scopes match your app's needs
+      state: linkedinState
+    });
+
+    const manualAuthUrl = `${linkedinAuthEndpoint}?${params.toString()}`;
+    console.log("Redirecting to LinkedIn:", manualAuthUrl); 
+
     return new Response(null, {
       status: 302,
-      headers: { Location: authUrl.toString() }
+      headers: { Location: manualAuthUrl },
     });
   }
 }

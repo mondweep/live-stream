@@ -1,4 +1,4 @@
-import { youtubeOAuth, linkedinOAuth } from "./oauth2.ts";
+import { youtubeOAuth, linkedinOAuth } from "./oauth2.ts"; // Import only the main handlers
 
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
 
@@ -8,7 +8,7 @@ function main() {
   
   console.log("OAuth server running on http://localhost:8000");
 
-  // Start the server using Deno.serve({ port: 8000 }, handleRequest);
+  serve(handleRequest, { port: 8000 });
 }
 
 async function handleRequest(request: Request): Promise<Response> {
@@ -20,11 +20,11 @@ async function handleRequest(request: Request): Promise<Response> {
     if (path === "/oauth2/youtube") {
       return await youtubeOAuth(request);
     } else if (path === "/oauth2/youtube/callback") {
-      return await youtubeOAuth(request);
+      return await youtubeOAuth(request); // Main handler handles callback too
     } else if (path === "/oauth2/linkedin") {
       return await linkedinOAuth(request);
     } else if (path === "/oauth2/linkedin/callback") {
-      return await linkedinOAuth(request);
+      return await linkedinOAuth(request); // Main handler handles callback too
     } else {
       // Serve a simple HTML page with links to the OAuth endpoints
       return new Response(`
